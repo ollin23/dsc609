@@ -5,6 +5,11 @@ as well.
 
 
 <b>NOTES:</b><br>
+13 Apr 2021
+- using _detector_ as a utility file for face detection
+- tested; works
+- next: recognition engine. This requires labelled video images of objects to identify (which will not be uploaded because privacy).
+
 12 April 2021
 - Committed first files
 
