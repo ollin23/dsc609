@@ -12,7 +12,7 @@ def main():
     nick = face_recognition.load_image_file("images/nick/nick1.jpg")
     nick_encoding = face_recognition.face_encodings(nick)[0]
 
-    alex = face_recognition.load_image_file("images/alex4.jpg")
+    alex = face_recognition.load_image_file("images/alex/alex4.jpg")
     alex_encoding = face_recognition.face_encodings(alex)[0]
 
     # arrays of known faces and encodings
