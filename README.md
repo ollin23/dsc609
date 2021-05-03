@@ -5,6 +5,14 @@ as well.
 
 
 <b>NOTES:</b><br>
+18 Apr 2021
+- Finally functional on workstation
+- Ubuntu 20.04 LTS, Python 3.8, OpenCV 4.3, CUDA 10.2, CUDNN 8.1, PyTorch 1.8.1, NumPy 1.20.2
+
+17 Apr 2021
+- after 3 OS crashes, finally installed OpenCV with GPU acceleration on Linux. Pro-gamer tip: DON'T USE THE NEW HOTNESS, stick with slightly older versions
+- refactoring with _controls.py_ for the controls
+
 13 Apr 2021
 - using _detector_ as a utility file for face detection
 - tested; works
