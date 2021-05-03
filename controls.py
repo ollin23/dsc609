@@ -1,8 +1,8 @@
 import logging
+import queue
 import socket
 import sys
-import threading
-import time
+
 
 import cv2
 from facenet_pytorch import MTCNN
@@ -11,6 +11,9 @@ import torch
 # set up logging
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger(__name__)
+
+# set up queue
+q = queue.Queue()
 
 
 def initialize(debug=False):
@@ -80,12 +83,12 @@ def info(drone, sock):
     print(f"Height: {height} cm")
     print(f"Temperature {temp} deg C")
     print(f"Pressure: {baro}")
-    print(f"Accelertaion: {accel}")
+    print(f"Acceleration: {accel}")
     print(f"Attitude: {att}")
 
 
 def command(drone, sock, cmd):
-    '''
+    """
     command(to_address, from_address, command)
         sends command to drone from host
     :param drone:
@@ -96,7 +99,7 @@ def command(drone, sock, cmd):
         string command for drone
     :return:
         nothing
-    '''
+    """
     logger.info({"action": "send_command",
                  "command": cmd})
     action = cmd.encode("utf-8")
@@ -134,13 +137,36 @@ def draw(frame, box, prob, lms):
                         (0, 255, 0), 2, cv2.LINE_AA)
 
 
-def video(drone, sock, mtcnn):
+def video(drone, sock, mtcnn, width=340, height=240):
     print("Starting video thread")
     if drone is not None and sock is not None:
         address = "udp://@0.0.0.0:11111"
     else:
-        address = 1
-    gpu = False
+        address = 0
+
+    vid = cv2.VideoCapture(address)
+    success, frame = vid.read()
+    print("Capturing video")
+
+    while success:
+        success, frame = vid.read()
+
+        if not success:
+            vid = cv2.VideoCapture(address)
+            success, frame = vid.read()
+
+        frame = cv2.resize(frame, (width, height))
+        box, prob, lms = mtcnn.detect(frame, landmarks=True)
+        draw(frame, box, prob, lms)
+        cv2.imshow("Drone Feed", frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            vid.release()
+            cv2.destroyAllWindows()
+            break
+
+
+def video_display(mtcnn, width, height):
+
     try:
         if cv2.cuda.getCudaEnabledDeviceCount() > 0:
             gpu = True
@@ -149,31 +175,48 @@ def video(drone, sock, mtcnn):
         gpu = False
         print("GPU not used")
 
+    while True:
+        if q.empty() is False:
+            frame = q.get()
+
+            if gpu:
+                gpuFrame = cv2.cuda_GpuMat()
+                gpuFrame.upload(frame)
+
+                resized = cv2.cuda.resize(gpuFrame, (width, height))
+                frame = resized.download()
+
+            else:
+                frame = cv2.resize(frame, (width, height))
+
+            frame = cv2.resize(frame, (width, height))
+
+            box, prob, lms = mtcnn.detect(frame, landmarks=True)
+            draw(frame, box, prob, lms)
+            cv2.imshow("Drone Feed", frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                # vid.release()
+                cv2.destroyAllWindows()
+                break
+
+
+def video_rcv(drone, sock):
+    print("Starting video thread")
+    if drone is not None and sock is not None:
+        address = "udp://@0.0.0.0:11111"
+    else:
+        address = 0
+
     vid = cv2.VideoCapture(address)
     print("Capturing video")
 
-    success = True
+    success, frame = vid.read()
+    q.put(frame)
+
     while success:
         success, frame = vid.read()
+        q.put(frame)
 
-        if gpu:
-            gpuFrame = cv2.cuda_GpuMat()
-            gpuFrame.upload(frame)
-
-            resized = cv2.cuda.resize(gpuFrame, (320, 240))
-            frame = resized.download()
-
-        else:
-            frame = cv2.resize(frame, (320, 240))
-
-        frame = cv2.resize(frame, (320, 240))
-
-        box, prob, lms = mtcnn.detect(frame, landmarks=True)
-        draw(frame, box, prob, lms)
-        cv2.imshow("Drone Feed", frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
-    vid.release()
-    cv2.destroyAllWindows()
+        # if cv2.waitKey(1) & 0xFF == ord("q"):
+        #     vid.release()
+        #     break
