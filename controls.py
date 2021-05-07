@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 # set up queue
 q = queue.Queue()
 
+# Haar Cascade faces
+cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+
 
 def initialize(debug=False):
     # local address
@@ -130,7 +133,7 @@ def draw(frame, box, prob, lms):
             x, y, w, h = int(b[0]), int(b[1]), int(b[2]), int(b[3])
 
             # draw box
-            cv2.rectangle(frame, (x, y), (w, h), (0, 255, 0), 2)
+            cv2.rectangle(frame, (x, y), (w, h), (0, 0, 255), 2)
 
             # display probability
             cv2.putText(frame, str(p), (w, h), cv2.FONT_HERSHEY_SIMPLEX, 1,
@@ -220,3 +223,11 @@ def video_rcv(drone, sock):
         # if cv2.waitKey(1) & 0xFF == ord("q"):
         #     vid.release()
         #     break
+
+
+def haar_cascade(frame):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = cascade.detectMultiScale(gray, 1.3, 4)
+
+    for (x,y,w,h) in faces:
+        cv2.rectangle(frame, (x,y), (x+w, y+h), (255,0,0), 2)

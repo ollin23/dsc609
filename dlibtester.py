@@ -1,23 +1,61 @@
+from controls import *
+
 import face_recognition
 import cv2
 import numpy as np
-from facenet_pytorch import MTCNN
+from pynput import keyboard
+
+
+color_known = (0, 200, 0)
+color_unknown = (0, 255, 255)
+speed = 10
+
+# set detection flags
+mtcnn_on = False
+haar_on = False
+dlib_on = False
+
+
+def on_press(key):
+    global mtcnn_on, haar_on, dlib_on
+    try:
+        if key.char == "1":
+            mtcnn_on = not mtcnn_on
+        if key.char == "2":
+            haar_on = not haar_on
+        if key.char == "3":
+            dlib_on = not dlib_on
+    except:
+        print(f"special key pressed: {key}")
 
 
 def main():
-    vid = cv2.VideoCapture(0)
-    mtcnn = MTCNN(device="cuda")
+    debug = True
+    drone, sock, mtcnn = initialize(debug)
 
-    # load and learn
-    nick = face_recognition.load_image_file("images/nick/nick1.jpg")
-    nick_encoding = face_recognition.face_encodings(nick)[0]
 
-    alex = face_recognition.load_image_file("images/alex/alex4.jpg")
-    alex_encoding = face_recognition.face_encodings(alex)[0]
+    # keyboard listener
+    listener = keyboard.Listener(
+        on_press=on_press)
+    listener.start()
 
-    # arrays of known faces and encodings
-    known_encodings = [nick_encoding, alex_encoding]
-    known_faces = ["Nick", "Alex"]
+    if drone is not None and sock is not None:
+        address = "udp://@0.0.0.0:11111"
+    else:
+        address = 0
+
+    vid = cv2.VideoCapture(address)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # Load faces and obtain encodings
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    # specific to implementation
+    face = face_recognition.load_image_file("images/nick/nick1.jpg")
+    face_enc = face_recognition.face_encodings(face)[0]
+
+    known_encodings = [face_enc]
+    known_faces = ["Nick"]
 
     face_locs = []
     face_encodings = []
@@ -27,9 +65,17 @@ def main():
     # scaling factors
     scale: float = 0.25
 
+    # launch drone
+    if drone:
+        launch(drone, sock)
+
     # main video loop
     while True:
+
         success, frame = vid.read()
+        frame_x = frame.shape[1]
+        frame_y = frame.shape[0]
+        frame_area = frame_x * frame_y
 
         # resize for faster processing
         smaller_frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
@@ -44,6 +90,8 @@ def main():
             face_locs = face_recognition.face_locations(rgb_frame, model="cnn")
             face_encodings = face_recognition.face_encodings(rgb_frame, face_locs)
 
+
+            # label images with name(s)
             face_names = []
             for encoding in face_encodings:
                 matches = face_recognition.compare_faces(known_encodings, encoding)
@@ -66,43 +114,77 @@ def main():
 
             startpoint = (right, top)
             endpoint = (left, bottom)
-            color = (0, 255, 0)
 
-            box, prob, lms = mtcnn.detect(frame, landmarks=True)
-            draw(frame, box, prob, lms)
+            # MTCNN in red
+            if mtcnn_on:
+                box, prob, lms = mtcnn.detect(frame, landmarks=True)
+                draw(frame, box, prob, lms)
 
-            # cv2.rectangle(frame,
-            #               startpoint,
-            #               endpoint,
-            #               color,
-            #               1)
+            # Haar Cascade in blue
+            if haar_on:
+                haar_cascade(frame)
 
-            cv2.putText(frame, name, (left+5, bottom+5), cv2.FONT_HERSHEY_SIMPLEX,
-                                      1.0, (255,255,255), 1)
+            # DLIB, known in green uknown in yellow
+            if dlib_on:
+                if name == "unknown":
+                    cv2.rectangle(frame,
+                                  startpoint,
+                                  endpoint,
+                                  color_unknown,
+                                  1)
+                    face_x = (left + right) // 2
+                    face_y = (top + bottom) // 2
+
+                    diff_x = frame_x - face_x
+                    diff_y = frame_y - face_y
+                    area = (right - left) * (bottom - top)
+                    face_percent = area / frame_area
+
+                    # keep drone centered
+                    if drone:
+                        x, y, z = 0, 0, 0
+                        if diff_x > 30:
+                            y = 30
+                        if diff_x < -30:
+                            y = -30
+
+                        if diff_y > 20:
+                            z = 20
+                        if diff_y < -20:
+                            z = -20
+
+                        if face_percent > 0.30:
+                            x = -30
+                        if face_percent < 0.05:
+                            x = 30
+
+                        command(drone, sock, f"go {x} {y} {z} {speed}")
+
+
+                else:
+                    cv2.rectangle(frame,
+                                  startpoint,
+                                  endpoint,
+                                  color_known,
+                                1)
+                cv2.putText(frame, name, (left+5, bottom+5), cv2.FONT_HERSHEY_SIMPLEX,
+                                          1.0, (255,255,255), 1)
 
         # display video
         cv2.imshow("Video", frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+
+    # land drone
+    if drone:
+        land(drone, sock)
+
     # release UDP socket, close OpenCV window, quit script/app
     vid.release()
     cv2.destroyAllWindows()
     quit()
-
-
-def draw(frame, box, prob, lms):
-
-    for b, p in zip(box, prob):
-        x, y, w, h = int(b[0]), int(b[1]), int(b[2]), int(b[3])
-
-        # draw box
-        cv2.rectangle(frame, (x, y), (w, h), (0, 255, 0), 2)
-
-        # display probability
-        cv2.putText(frame, str(p), (w, h), cv2.FONT_HERSHEY_SIMPLEX, 1,
-                    (0, 255, 0), 2, cv2.LINE_AA)
-
 
 if __name__ == "__main__":
     main()
