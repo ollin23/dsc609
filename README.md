@@ -5,6 +5,14 @@ as well.
 
 
 <b>NOTES:</b><br>
+7 May 2021:
+- added minor functionality:  use keyboard to toggle filters
+- allows for keyboard control of drone
+- Moving Forward: keyboard controls of UAV, get better or build UAV
+
+19 Apr 2021
+- tactical pause to do another project for a couple weeks
+
 18 Apr 2021
 - Finally functional on workstation
 - Ubuntu 20.04 LTS, Python 3.8, OpenCV 4.3, CUDA 10.2, CUDNN 8.1, PyTorch 1.8.1, NumPy 1.20.2
